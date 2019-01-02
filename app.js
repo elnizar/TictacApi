@@ -41,162 +41,88 @@ app.post('/api/justify', verifyToken, (req, res) => {
             return;
         }
         else {
-            onJustifyVerified();
+            onJustifyVerified(req.body,req.token);
         }
 
-
     });
+
+    function onJustifyVerified() {
+
+        res.type("text/plain");
+        var text = req.body;
+
+        // Check content
+        if (!text) {
+            res.send('');
+            return;
+        }
+        // Check current user data
+        if (!checkUserRates()) {
+            return;
+        }
+        var cmp = 79;
+        var newtext = "";
+        var j;
+        text = text.replace(/\s\s+/g, ' ');
+        for (var i = 0; i < text.length; i++) {
+            newtext += text[i];
+            if (i == cmp ) {
+                if (text[i] == ' ' || text[i] == ',' || text[i] == '.') {
+                    newtext += '\n';
+                    cmp = i + 1 + 80;
+                }
+                else {
+                    j = 0;
+                    while (text[i] !== ' ' && text[i] !== '.' && text[i] !== ',') {
+                        i = i - 1;
+                        j++;
+                    }
+                    newtext = newtext.substr(0, newtext.length - j);
+                    newtext += '\n';
+                    cmp = i + 80;
+                }
+            }
+        }
+        res.send(addSpace(newtext));
+    }
+
 
     function checkUserRates() {
         var textWords = req.body;
 
         var userRateLimit = rateLimit[req.token];
-
+    
         if (!userRateLimit || !userRateLimit.date) {
             res.sendStatus(403);
             return false;
         }
-
+    
         // Check words rate
         let userDay = userRateLimit.date.getDate();
         let currentDay = new Date().getDate();
-
+    
         if (currentDay !== userDay) {
             userRateLimit.date = new Date();
             userRateLimit.words = 0;
         }
         //console.log(textWords.length);
-
+    
         if (userRateLimit.words + textWords.length > 80000) {
             res.status(402).json({ message: '402 Payment Required.' });
             return false;
         }
-
+    
         //console.log(textWords.length + userRateLimit.words);
         // Update words count
         userRateLimit.words = userRateLimit.words + textWords.length;
-
+    
         rateLimit[req.token] = userRateLimit;
-
+    
         return true;
     }
-
-    function onJustifyVerified() {
-
-        res.type("text/plain");
-
-        // Check content
-        var text = req.body;
-
-        if (!text) {
-            res.send('');
-            return;
-        }
-
-        // Split text to words and check words count
-        var textWords = text.replace(/\s\s+/g, ' ').split(/\n|\s/);
-        if (!textWords.length) {
-            res.send('');
-            return;
-        }
-
-        // Check current user data
-        if (!checkUserRates()) {
-            return;
-        }
-
-        // Justify texts
-        var paragaphs = text.split(/\n/);
-
-        for (var i = paragaphs.length - 1; i >= 0; i--) {
-            //console.log(paragaphs.length);
-
-            var justifiedParagraph = justifyParagrpah(paragaphs[i]);
-            if (!justifiedParagraph) {
-                paragaphs.splice(i, 1);
-            } else {
-                paragaphs[i] = justifiedParagraph;
-            }
-        }
-
-        res.send(paragaphs.join("\n"));
-    }
-
-    function justifyParagrpah(paragrahp) {
-        paragrahp = paragrahp.replace(/\s\s+/g, ' ').trim();
-        var paragrahpWords = paragrahp.split(/\s/);
-
-        if (!paragrahp || !paragrahpWords.length) {
-            return "";
-        }
-
-        // Create lines
-        const MaxLineLength = 80;
-
-        var newLines = [];
-        var currentLineIndex = 0;
-        for (var i = 0; i < paragrahpWords.length; i++) {
-            // Init the new line
-            if (!newLines[currentLineIndex]) {
-                newLines[currentLineIndex] = "";
-            }
-
-            // Check caracteres limit
-            var currentLine = newLines[currentLineIndex];
-            var currentWord = paragrahpWords[i];
-            if (currentWord.length + currentLine.length >= MaxLineLength) {
-                //console.log(currentLine.length);
-                currentLineIndex++;
-                i--;
-                continue;
-            }
-
-            if (currentLine) {
-                currentLine += " ";
-            }
-            currentLine += currentWord;
-            newLines[currentLineIndex] = currentLine;
-        }
-
-        for (var i = 0; i < newLines.length - 1; i++) {
-
-            var line = newLines[i];
-            // console.log(line.length);
-
-            if (line.length >= MaxLineLength) {
-                //console.log(line);
-                continue;
-            }
-            var k = 1;
-            for (var j = 0; j < line.length; j++) {
-
-                if (line[j] == " " && line.length < MaxLineLength) {
-                    line = setCharAt(line, j, "  ");
-                    j = j + k;
-                    //console.log(line.length);
-                }
-                if (j == line.length - 1 && line.length < MaxLineLength) {
-                    j = 0;
-                    k++;
-                }
-            }
-
-            newLines[i] = line;
-
-
-        }
-
-        return newLines.join("\n");
-    }
-
-    function setCharAt(str, index, chr) {
-        if (index > str.length - 1) return str;
-        return str.substr(0, index) + chr + str.substr(index + 1);
-    }
-
+    
 
 });
-
 
 app.post('/api/token', (req, res) => {
     var sql = 'SELECT 1 FROM `user` WHERE email = ' + mysql.escape(req.query.email);
@@ -232,6 +158,7 @@ app.post('/api/token', (req, res) => {
     });
 });
 
+
 // FORMAT OF TOKEN
 // authorization: <access_token>
 
@@ -250,6 +177,45 @@ function verifyToken(req, res, next) {
         res.sendStatus(403);
     }
 
+}
+
+function addSpace(text) {
+    MaxLineLength = 80;
+
+    var newLines = text.split(/\n/);
+
+    for (var i = 0; i < newLines.length; i++) {
+
+        var line = newLines[i].trim();
+        console.log(line.length);
+
+        if (line.length >= MaxLineLength) {
+            //console.log(line);
+            continue;
+        }
+        var k = 1;
+        for (var j = 0; j < line.length; j++) {
+
+            if (line[j] == " " && line.length < MaxLineLength) {
+                line = setCharAt(line, j, "  ");
+                j = j + k;
+                //console.log(line.length);
+            }
+            if (j == line.length - 1 && line.length < MaxLineLength) {
+                j = 0;
+                k++;
+            }
+        }
+        newLines[i] = line;
+    }
+    return newLines.join("\n");
+
+}
+
+
+function setCharAt(str, index, chr) {
+    if (index > str.length - 1) return str;
+    return str.substr(0, index) + chr + str.substr(index + 1);
 }
 
 app.listen(3000, () => console.log('Server started on port 3000'));
